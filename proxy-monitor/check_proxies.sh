@@ -48,6 +48,14 @@ echo "开始检测代理..."
 
 proxies=$(cat "/mnt/j/code/linux-tools/proxy-monitor/proxy.txt")
 
+timestamp=$(date '+%Y-%m-%d %H:%M:%S')
+
+temp_dir=$(mktemp -d)
+
+pids=()
+
+i=0
+
 results=()
 
 html_rows=""
@@ -60,57 +68,77 @@ for proxy in $proxies; do
 
     port=$(echo $proxy | cut -d: -f2)
 
-    echo "检测代理 $ip:$port"
+    echo "启动检测代理 $ip:$port"
 
-    # Test http
+    (
 
-    echo "  测试 http 代理..."
+        # Test http
 
-    output=$(curl --connect-timeout 2 --proxy http://$ip:$port https://api.myip.la -s --max-time 10 2>/dev/null)
+        output=$(curl --connect-timeout 2 --proxy http://$ip:$port https://api.myip.la -s --max-time 10 2>/dev/null)
 
-    if [ "$output" == "$ip" ]; then
+        if [ "$output" == "$ip" ]; then
 
-        echo "    http 代理有效"
+            echo "{\"IP\":\"$ip\",\"Port\":\"$port\",\"type\":\"http\"}" >> "$temp_dir/result_$i"
 
-        current_time=$(date '+%Y-%m-%d %H:%M:%S')
+        fi
 
-        results+=("{\"IP\":\"$ip\",\"Port\":\"$port\",\"type\":\"http\",\"time\":\"$current_time\"}")
+        # Test socks5
 
-        html_rows="$html_rows<tr><td>$ip</td><td>$port</td><td>http</td><td>$current_time</td></tr>"
+        output=$(curl --connect-timeout 2 --proxy socks5h://$ip:$port https://api.myip.la -s --max-time 10 2>/dev/null)
 
-        data_rows="$data_rows{ip:'$ip', port:'$port', type:'http', time:'$current_time'},"
+        if [ "$output" == "$ip" ]; then
 
-    else
+            echo "{\"IP\":\"$ip\",\"Port\":\"$port\",\"type\":\"socks5\"}" >> "$temp_dir/result_$i"
 
-        echo "    http 代理无效"
+        fi
 
-    fi
+    ) &
 
-    # Test socks5
+    pids+=($!)
 
-    echo "  测试 socks5 代理..."
+    ((i++))
 
-    output=$(curl --connect-timeout 5 --proxy socks5://$ip:$port https://api.myip.la -s --max-time 10 2>/dev/null)
+done
 
-    if [ "$output" == "$ip" ]; then
+# 等待所有后台进程完成
 
-        echo "    socks5 代理有效"
+for pid in "${pids[@]}"; do
 
-        current_time=$(date '+%Y-%m-%d %H:%M:%S')
+    wait "$pid"
 
-        results+=("{\"IP\":\"$ip\",\"Port\":\"$port\",\"type\":\"socks5\",\"time\":\"$current_time\"}")
+done
 
-        html_rows="$html_rows<tr><td>$ip</td><td>$port</td><td>socks5</td><td>$current_time</td></tr>"
+# 收集结果
 
-        data_rows="$data_rows{ip:'$ip', port:'$port', type:'socks5', time:'$current_time'},"
+for file in "$temp_dir"/result_*; do
 
-    else
+    if [ -f "$file" ]; then
 
-        echo "    socks5 代理无效"
+        while IFS= read -r line; do
+
+            results+=("$line")
+
+            # 解析 JSON 来构建 html_rows 和 data_rows
+
+            ip=$(echo "$line" | jq -r '.IP')
+
+            port=$(echo "$line" | jq -r '.Port')
+
+            type=$(echo "$line" | jq -r '.type')
+
+            time="$timestamp"
+
+            html_rows="$html_rows<tr><td>$ip</td><td>$port</td><td>$type</td><td>$time</td></tr>"
+
+            data_rows="$data_rows{ip:'$ip', port:'$port', type:'$type', time:'$time'},"
+
+        done < "$file"
 
     fi
 
 done
+
+rm -rf "$temp_dir"
 
 echo "检测完成，共找到 ${#results[@]} 个有效代理"
 
@@ -118,9 +146,11 @@ echo "检测完成，共找到 ${#results[@]} 个有效代理"
 
 data_rows=${data_rows%,}
 
-# Build JSON array
+# Build JSON object with timestamp and proxies
 
-printf '%s\n' "${results[@]}" | jq -s . > "/mnt/j/code/linux-tools/proxy-monitor/index.html"
+proxies_json=$(printf '%s\n' "${results[@]}" | jq -s .)
+
+echo "{\"timestamp\":\"$timestamp\",\"proxies\":$proxies_json}" | jq . > "/mnt/j/code/linux-tools/proxy-monitor/index.html"
 
 echo "结果已保存到 index.html"
 
