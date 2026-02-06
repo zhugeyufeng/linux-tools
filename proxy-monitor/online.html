@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang='zh-CN'>
+<head>
+    <meta charset='UTF-8'>
+    <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+    <title>有效代理列表</title>
+    <link rel='stylesheet' href='https://unpkg.com/layui@2.9.8/dist/css/layui.css'>
+</head>
+<body style='padding: 20px;'>
+    <h1 style='margin-bottom: 20px;'>有效代理列表</h1>
+    <p>共找到 5 个有效代理</p>
+    <table id='table'></table>
+    <script src='https://unpkg.com/layui@2.9.8/dist/layui.js'></script>
+    <script>
+        layui.use('table', function(){
+            var table = layui.table;
+            table.render({
+                elem: '#table',
+                data: [{ip:'166.111.88.20', port:'49424', type:'http', time:'2026-02-06 10:15:56'},{ip:'183.173.82.180', port:'7892', type:'http', time:'2026-02-06 10:16:04'},{ip:'183.173.204.74', port:'64846', type:'http', time:'2026-02-06 10:16:12'},{ip:'166.111.58.140', port:'61172', type:'http', time:'2026-02-06 10:16:16'},{ip:'166.111.88.20', port:'49424', type:'http', time:'2026-02-06 10:16:18'}],
+                skin: 'line', // 行边框风格
+                even: true, // 开启隔行背景
+                size: 'sm', // 小尺寸
+                cols: [[
+                    {field: 'ip', title: 'IP'},
+                    {field: 'port', title: 'Port'},
+                    {field: 'type', title: 'Type'},
+                    {field: 'time', title: 'Time'}
+                ]]
+            });
+        });
+    </script>
+</body>
+</html>
