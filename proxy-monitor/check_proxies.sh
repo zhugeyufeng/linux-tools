@@ -46,7 +46,7 @@ fi
 
 echo "开始检测代理..."
 
-proxies=$(cat "/mnt/j/code/linux-tools/proxy-monitor/proxy.txt")
+proxies=$(cat "/root/proxy/proxy.txt")
 
 timestamp=$(date '+%Y-%m-%d %H:%M:%S')
 
@@ -150,11 +150,11 @@ data_rows=${data_rows%,}
 
 proxies_json=$(printf '%s\n' "${results[@]}" | jq -s .)
 
-echo "{\"timestamp\":\"$timestamp\",\"proxies\":$proxies_json}" | jq . > "/mnt/j/code/linux-tools/proxy-monitor/index.html"
+echo "{\"timestamp\":\"$timestamp\",\"proxies\":$proxies_json}" | jq . > "/opt/1panel/www/sites/proxy.curl.im/index/index.html"
 
 echo "结果已保存到 index.html"
 
-# Build HTML table with Layui
+# Build HTML table with Element UI and mobile responsive
 
 html="<!DOCTYPE html>
 <html lang='zh-CN'>
@@ -162,34 +162,96 @@ html="<!DOCTYPE html>
     <meta charset='UTF-8'>
     <meta name='viewport' content='width=device-width, initial-scale=1.0'>
     <title>有效代理列表</title>
-    <link rel='stylesheet' href='https://unpkg.com/layui@2.9.8/dist/css/layui.css'>
+    <!-- 引入样式 -->
+    <link rel=\"stylesheet\" href=\"https://unpkg.com/element-ui/lib/theme-chalk/index.css\">
+    <!-- 引入组件库 -->
+    <script src=\"https://unpkg.com/vue@2/dist/vue.js\"></script>
+    <script src=\"https://unpkg.com/element-ui/lib/index.js\"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            text-align: center;
+            color: #409EFF;
+            margin-bottom: 20px;
+        }
+        .summary {
+            text-align: center;
+            margin-bottom: 20px;
+            font-size: 16px;
+        }
+        /* 移动端样式 */
+        @media (max-width: 768px) {
+            body {
+                padding: 10px;
+            }
+            .container {
+                padding: 10px;
+            }
+            h1 {
+                font-size: 24px;
+            }
+            .summary {
+                font-size: 14px;
+            }
+        }
+    </style>
 </head>
-<body style='padding: 20px;'>
-    <h1 style='margin-bottom: 20px;'>有效代理列表</h1>
-    <p>共找到 ${#results[@]} 个有效代理</p>
-    <table id='table'></table>
-    <script src='https://unpkg.com/layui@2.9.8/dist/layui.js'></script>
+<body>
+    <div id=\"app\" class=\"container\">
+        <h1>有效代理列表</h1>
+        <p class=\"summary\">共找到 ${#results[@]} 个有效代理</p>
+        <el-table
+            :data=\"proxies\"
+            style=\"width: 100%\"
+            :stripe=\"true\"
+            :border=\"true\"
+            size=\"small\">
+            <el-table-column
+                prop=\"ip\"
+                label=\"IP\"
+                width=\"150\">
+            </el-table-column>
+            <el-table-column
+                prop=\"port\"
+                label=\"Port\"
+                width=\"100\">
+            </el-table-column>
+            <el-table-column
+                prop=\"type\"
+                label=\"Type\"
+                width=\"100\">
+            </el-table-column>
+            <el-table-column
+                prop=\"time\"
+                label=\"Time\"
+                min-width=\"180\">
+            </el-table-column>
+        </el-table>
+    </div>
     <script>
-        layui.use('table', function(){
-            var table = layui.table;
-            table.render({
-                elem: '#table',
-                data: [$data_rows],
-                skin: 'line', // 行边框风格
-                even: true, // 开启隔行背景
-                size: 'sm', // 小尺寸
-                cols: [[
-                    {field: 'ip', title: 'IP'},
-                    {field: 'port', title: 'Port'},
-                    {field: 'type', title: 'Type'},
-                    {field: 'time', title: 'Time'}
-                ]]
-            });
+        new Vue({
+            el: '#app',
+            data: {
+                proxies: [$data_rows]
+            }
         });
     </script>
 </body>
 </html>"
 
-echo "$html" > "/mnt/j/code/linux-tools/proxy-monitor/online.html"
+echo "$html" > "/opt/1panel/www/sites/proxy.curl.im/index/online.html"
 
 echo "美化表格已保存到 online.html"
