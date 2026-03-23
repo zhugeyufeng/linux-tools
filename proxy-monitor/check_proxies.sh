@@ -118,20 +118,6 @@ for file in "$temp_dir"/result_*; do
 
             results+=("$line")
 
-            # 解析 JSON 来构建 html_rows 和 data_rows
-
-            ip=$(echo "$line" | jq -r '.IP')
-
-            port=$(echo "$line" | jq -r '.Port')
-
-            type=$(echo "$line" | jq -r '.type')
-
-            time="$timestamp"
-
-            html_rows="$html_rows<tr><td>$ip</td><td>$port</td><td>$type</td><td>$time</td></tr>"
-
-            data_rows="$data_rows{ip:'$ip', port:'$port', type:'$type', time:'$time'},"
-
         done < "$file"
 
     fi
@@ -142,13 +128,119 @@ rm -rf "$temp_dir"
 
 echo "检测完成，共找到 ${#results[@]} 个有效代理"
 
+# 第二轮：并行获取 IPv6 地址
+
+echo "开始获取 IPv6 地址..."
+
+ipv6_temp_dir=$(mktemp -d)
+
+ipv6_pids=()
+
+j=0
+
+for result in "${results[@]}"; do
+
+    r_ip=$(echo "$result" | jq -r '.IP')
+
+    r_port=$(echo "$result" | jq -r '.Port')
+
+    r_type=$(echo "$result" | jq -r '.type')
+
+    (
+
+        if [ "$r_type" == "socks5" ]; then
+
+            proxy_proto="socks5h"
+
+        else
+
+            proxy_proto="http"
+
+        fi
+
+        ipv6_addr=$(curl --connect-timeout 3 --proxy "$proxy_proto://$r_ip:$r_port" http://ipv6.ip.sb -s --max-time 10 2>/dev/null)
+
+        # 去除空白字符
+
+        ipv6_addr=$(echo "$ipv6_addr" | tr -d '[:space:]')
+
+        # 校验是否为有效 IPv6 地址（包含冒号的十六进制格式）
+
+        if ! echo "$ipv6_addr" | grep -qE '^[0-9a-fA-F:]+$'; then
+
+            ipv6_addr="N/A"
+
+        fi
+
+        echo "$ipv6_addr" > "$ipv6_temp_dir/result_$j"
+
+    ) &
+
+    ipv6_pids+=($!)
+
+    ((j++))
+
+done
+
+# 等待所有 IPv6 检测完成
+
+for pid in "${ipv6_pids[@]}"; do
+
+    wait "$pid"
+
+done
+
+# 收集 IPv6 结果
+
+ipv6_results=()
+
+for ((k=0; k<${#results[@]}; k++)); do
+
+    if [ -f "$ipv6_temp_dir/result_$k" ]; then
+
+        ipv6_results+=($(cat "$ipv6_temp_dir/result_$k"))
+
+    else
+
+        ipv6_results+=("N/A")
+
+    fi
+
+done
+
+rm -rf "$ipv6_temp_dir"
+
+echo "IPv6 地址获取完成"
+
+# 构建数据行
+
+for ((k=0; k<${#results[@]}; k++)); do
+
+    ip=$(echo "${results[$k]}" | jq -r '.IP')
+
+    port=$(echo "${results[$k]}" | jq -r '.Port')
+
+    type=$(echo "${results[$k]}" | jq -r '.type')
+
+    ipv6="${ipv6_results[$k]}"
+
+    time="$timestamp"
+
+    data_rows="$data_rows{ip:'$ip', port:'$port', type:'$type', ipv6:'$ipv6', update_time:'$time'},"
+
+done
+
 # Remove trailing comma from data_rows
 
 data_rows=${data_rows%,}
 
-# Build JSON object with timestamp and proxies
+# 构建带 IPv6 的 JSON
 
-proxies_json=$(printf '%s\n' "${results[@]}" | jq -s .)
+proxies_json=$(for ((k=0; k<${#results[@]}; k++)); do
+
+    echo "${results[$k]}" | jq --arg ipv6 "${ipv6_results[$k]}" '. + {ipv6: $ipv6}'
+
+done | jq -s .)
 
 echo "{\"timestamp\":\"$timestamp\",\"proxies\":$proxies_json}" | jq . > "/opt/1panel/www/sites/proxy.curl.im/index/index.html"
 
@@ -221,23 +313,33 @@ html="<!DOCTYPE html>
             size=\"small\">
             <el-table-column
                 prop=\"ip\"
-                label=\"IP\"
-                width=\"150\">
+                label=\"IPv4\"
+                width=\"150\"
+                align=\"center\">
             </el-table-column>
             <el-table-column
                 prop=\"port\"
                 label=\"Port\"
-                width=\"100\">
+                width=\"100\"
+                align=\"center\">
             </el-table-column>
             <el-table-column
                 prop=\"type\"
-                label=\"Type\"
-                width=\"100\">
+                label=\"Proxy Type\"
+                width=\"100\"
+                align=\"center\">
             </el-table-column>
             <el-table-column
-                prop=\"time\"
-                label=\"Time\"
-                min-width=\"180\">
+                prop=\"ipv6\"
+                label=\"IPv6\"
+                min-width=\"200\"
+                align=\"center\">
+            </el-table-column>
+            <el-table-column
+                prop=\"update_time\"
+                label=\"Update Time\"
+                min-width=\"180\"
+                align=\"center\">
             </el-table-column>
         </el-table>
     </div>
